@@ -73,10 +73,22 @@ Resources:
       UserData:
         Fn::Base64: |
           #!/bin/bash
+          set -eux
+
+          # Install updates and Docker
           yum update -y
+          amazon-linux-extras enable docker
           yum install -y docker
-          service docker start
-          usermod -a -G docker ec2-user
+
+          # Start and enable Docker service
+          systemctl start docker
+          systemctl enable docker
+
+          # Add EC2 user to Docker group
+          usermod -aG docker ec2-user
+
+          # Ensure changes apply
+          newgrp docker
 
   # Application Load Balancer
   LoadBalancer:
