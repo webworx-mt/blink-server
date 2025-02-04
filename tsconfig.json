@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ESNext", // Use the latest ECMAScript features
+    "module": "CommonJS", // Required for Node.js compatibility
+    "rootDir": "src", // Source files location
+    "outDir": "build", // Compiled JavaScript output directory
+    "strict": true, // Enable all strict type-checking options
+    "esModuleInterop": true, // Allow default imports from CommonJS modules
+    "forceConsistentCasingInFileNames": true, // Prevent case-sensitive import mismatches
+    "skipLibCheck": true // Skip type checking of declaration files for faster builds
+  },
+  "include": ["src/**/*"],
+  "exclude": ["**/*.test.ts, node_modules, build"],
+}
