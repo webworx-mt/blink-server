@@ -1,5 +1,5 @@
-import express from "express";
 import router from "./router";
+import express, { Request, Response } from 'express';
 
 const startServer = (port: number | string) => {
   const app = express();
@@ -7,8 +7,8 @@ const startServer = (port: number | string) => {
   app.use(express.json());
   app.use("/api", router);
 
-  app.get("/", (req, res) => {
-    res.send("Hello, world!");
+  app.use('/health', (_req: Request, res: Response) => {
+    res.sendStatus(200);
   });
 
   app.listen(port, () => {
