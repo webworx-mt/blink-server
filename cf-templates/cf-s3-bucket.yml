@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Blink S3 bucket for learning purposes
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: blink-documents-bucket
+
+Resources:
+  # Main S3 Bucket
+  MainBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: aws/s3 
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+Outputs:
+  MainBucketName:
+    Description: Name of the main bucket
+    Value: !Ref MainBucket

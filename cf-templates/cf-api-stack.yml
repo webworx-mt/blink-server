@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 instance hosting an API with an Application Load Balancer (ALB) and HTTPS support
+
+Parameters:
+  KeyName:
+    Type: String
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: EC2 instance type
+  SSHLocation:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: IP address range that can SSH into the EC2 instance
+  SSLCertificateArn:
+    Type: String
+    Description: ARN of the ACM certificate for HTTPS
+
+Resources:
+  # Security Group for EC2 Instance
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP, HTTPS, and SSH access
+      VpcId: vpc-042ab77de9894db8b
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: "-1"  # Allow all outbound traffic
+          CidrIp: 0.0.0.0/0
+
+  # Security Group for ALB
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and HTTPS traffic to ALB
+      VpcId: vpc-042ab77de9894db8b
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  # EC2 Instance
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: ami-0ebba8fc8759958a0 
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      SubnetId: subnet-0c91497ce82e17f73
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          yum install -y docker
+          service docker start
+          usermod -a -G docker ec2-user
+          docker run -d -p 80:3000 my-docker-image  # Replace with your Docker image
+
+  # Application Load Balancer
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - subnet-0c91497ce82e17f73
+        - subnet-0e327dfc9eb13e01a
+      Type: application
+
+  # ALB Listener for HTTP (Port 80)
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ALB Listener for HTTPS (Port 443)
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref SSLCertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # Target Group for EC2 Instance
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: vpc-042ab77de9894db8b
+      Targets:
+        - Id: !Ref EC2Instance
+          Port: 80
+
+Outputs:
+  LoadBalancerDNS:
+    Description: DNS name of the Load Balancer
+    Value: !GetAtt LoadBalancer.DNSName
