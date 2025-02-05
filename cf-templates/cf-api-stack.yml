@@ -2,6 +2,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: EC2 instance with ALB and HTTPS support
 
 Parameters:
+  RunnerToken:
+    Type: String
+    Description: GitHub Actions Runner Token
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: SSH key pair for EC2 access
@@ -81,14 +84,45 @@ Resources:
         Fn::Base64: |
           #!/bin/bash
           set -euxo pipefail
+
+          # Install Docker
           yum update -y
           amazon-linux-extras install docker -y
           systemctl enable --now docker
           usermod -aG docker ec2-user
-          # Refresh group membership without reboot
-          exec sudo -u ec2-user -i <<'EOF'
-            docker --version
+
+          # Install GitHub Actions Runner
+          mkdir -p /actions-runner
+          cd /actions-runner
+
+          # Download the latest runner package
+          curl -o actions-runner-linux-x64-2.322.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.322.0/actions-runner-linux-x64-2.322.0.tar.gz
+
+          # Extract the runner package
+          tar xzf ./actions-runner-linux-x64-2.322.0.tar.gz
+
+          # Fetch the runner token from the parameter passed into the CloudFormation stack
+          RUNNER_TOKEN="{{RunnerToken}}"
+
+          # Configure the runner
+          ./config.sh --url https://github.com/webworx-mt/blink-server --token $RUNNER_TOKEN --name ec2-runner --labels ec2,docker --unattended
+
+          # Install and start the runner as a service
+          ./svc.sh install
+          ./svc.sh start
+
+          # Add cleanup script for runner deregistration on instance termination
+          cat << 'EOF' > /actions-runner/cleanup.sh
+          #!/bin/bash
+          cd /actions-runner
+          ./svc.sh stop
+          ./svc.sh uninstall
+          ./config.sh remove --token $RUNNER_TOKEN
           EOF
+          chmod +x /actions-runner/cleanup.sh
+
+          # Register cleanup script to run on instance termination
+          echo "/actions-runner/cleanup.sh" > /etc/rc0.d/K99_cleanup_runner
 
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer

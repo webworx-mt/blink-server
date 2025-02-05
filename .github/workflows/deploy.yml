@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ec2]  # Use self-hosted runner
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,19 +28,12 @@ jobs:
           docker push mtwebworx/blink-server-container:${{ github.sha }}
           docker push mtwebworx/blink-server-container:latest
 
-      - name: Deploy to EC2
+      - name: Update Container
         run: |
-          printf "%s" "${{ secrets.EC2_SSH_KEY }}" > key.pem
-          chmod 400 key.pem
-
-          ssh -o ConnectTimeout=15 -i key.pem ec2-user@${{ secrets.EC2_HOST }} << 'END_SSH'
-            set -e  # Fail on error
-            echo "${{ secrets.DOCKER_TOKEN }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-            docker pull mtwebworx/blink-server-container:latest
-            docker rm -f blink-server-container-container || true
-            docker run -d \
-              --name blink-server-container-container \
-              -p 8080:3000 \  # Match ALB → EC2:8080 → Container:3000
-              --restart unless-stopped \
-              mtwebworx/blink-server-container:latest
-          END_SSH
+          docker pull mtwebworx/blink-server-container:latest
+          docker rm -f blink-server-container-container || true
+          docker run -d \
+            --name blink-server-container-container \
+            -p 8080:3000 \
+            --restart unless-stopped \
+            mtwebworx/blink-server-container:latest
